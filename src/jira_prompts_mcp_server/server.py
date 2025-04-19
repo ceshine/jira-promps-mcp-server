@@ -27,6 +27,19 @@ PROMPTS = {
             ),
         ],
     ),
+    "jira-issue-full": types.Prompt(
+        name="jira-issue-full",
+        description="Get core fields, comments, and linked issues for a Jira issue",
+        arguments=[
+            # Note: Zed only supports one prompt argument
+            # Reference: https://github.com/zed-industries/zed/issues/21944
+            types.PromptArgument(
+                name="issue-key",
+                description="The key/ID of the issue",
+                required=True,
+            ),
+        ],
+    ),
 }
 
 
@@ -106,18 +119,40 @@ async def list_prompts() -> list[types.Prompt]:
     return list(PROMPTS.values())
 
 
+def _postprocessing_for_issue_fields_(field_to_value):
+    for name_field in ("status", "priority", "issuetype"):
+        field_to_value[name_field] = field_to_value[name_field].name
+    for user_field in ("assignee", "reporter"):
+        field_to_value[user_field] = field_to_value[user_field].displayName
+    field_to_value["parent"] = {
+        "key": field_to_value["parent"].key,
+        "summary": field_to_value["parent"].fields.summary,
+        "status": field_to_value["parent"].fields.status.name,
+    }
+
+
+def get_issue_and_core_fields(jira_fetcher: JiraFetcher, arguments: dict[str, str] | None):
+    if not arguments:
+        raise ValueError("Argument `issue-keu` is required")
+    issue_key = arguments.get("issue-key", "")
+    assert issue_key
+    field_to_value, issue = jira_fetcher.get_issue_and_core_fields(issue_key)
+    field_to_value["issue_key"] = issue_key
+    _postprocessing_for_issue_fields_(field_to_value)
+    return field_to_value, issue
+
+
 @APP.get_prompt()
 async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> types.GetPromptResult:
     if name not in PROMPTS:
         raise ValueError(f"Prompt not found: {name}")
     jira_fetcher = APP.request_context.lifespan_context
-    if name == "jira-issue-brief":
-        if not arguments:
-            raise ValueError("Arguments required")
-        issue_key = arguments.get("issue-key", "")
-        assert issue_key
-        field_to_value, _ = jira_fetcher.get_issue_and_core_fields(issue_key)
-        field_to_value["issue_key"] = issue_key
+    if name.startswith("jira-issue"):
+        field_to_value, issue = get_issue_and_core_fields(jira_fetcher, arguments)
+        if name == "jira-issue-full":
+            field_to_value["links"] = jira_fetcher.collect_links(issue)
+            field_to_value["subtasks"] = jira_fetcher.collect_subtasks(issue)
+            field_to_value["comments"] = jira_fetcher.collect_comments(issue)
         return types.GetPromptResult(
             messages=[
                 types.PromptMessage(

@@ -26,7 +26,7 @@ class IssuesMixin(JiraClient):
         ]
 
     @staticmethod
-    def collect_links_and_subtasks(issue: Issue):
+    def collect_links(issue: Issue):
         links = issue.fields.issuelinks
         results = []
         for entry in links:
@@ -50,18 +50,20 @@ class IssuesMixin(JiraClient):
                         "type": entry.outwardIssue.fields.issuetype.name,
                     }
                 )
-        subtasks = issue.fields.subtasks
-        for entry in subtasks:
-            results.append(
-                {
-                    "relationship": "subtask",
-                    "key": entry.key,
-                    "summary": entry.fields.summary,
-                    "status": entry.fields.status.name,
-                    "type": entry.fields.issuetype.name,
-                }
-            )
         return results
+
+    @staticmethod
+    def collect_subtasks(issue):
+        return [
+            {
+                "relationship": "subtask",
+                "key": entry.key,
+                "summary": entry.fields.summary,
+                "status": entry.fields.status.name,
+                "type": entry.fields.issuetype.name,
+            }
+            for entry in issue.fields.subtasks
+        ]
 
     def get_issue_and_core_fields(
         self,

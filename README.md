@@ -44,12 +44,13 @@ Add the following to your `settings.json`:
 
 The server responds to the following commands:
 
-1. `jira-issue-brief <issue-key>`: Get the core information about a Jira issue. Requires the issue key (e.g., `PROJ-123`) as an argument.
-
+1. `jira-issue-brief <issue-key>`: Retrieves the core fields of a Jira issue. Requires the issue key (e.g., `PROJ-123`) as an argument.
+2. `jira-issue-full <issue-key>`: Retrieves the core fields, comments, linked issues, and subtasks of a Jira issue. Requires the issue key as an argument.
 
 Examples:
 
 1. `/jira-issue-brief PROJ-123`
+2. `/jira-issue-brief PROJ-155`
 
 
 ## License
