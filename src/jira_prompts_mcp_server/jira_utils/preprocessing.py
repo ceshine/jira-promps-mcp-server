@@ -1,9 +1,12 @@
 """Jira-specific text preprocessing module."""
 
-import logging
 import re
+import logging
+from functools import lru_cache
 from typing import Any
 
+
+import jira
 from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify as md
 
@@ -123,7 +126,7 @@ class BasePreprocessor:
 class JiraPreprocessor(BasePreprocessor):
     """Handles text preprocessing for Jira content."""
 
-    def __init__(self, base_url: str = "", **kwargs: Any) -> None:
+    def __init__(self, jira_client: jira.JIRA, base_url: str = "", **kwargs: Any) -> None:
         """
         Initialize the Jira text preprocessor.
 
@@ -132,6 +135,9 @@ class JiraPreprocessor(BasePreprocessor):
             **kwargs: Additional arguments for the base class
         """
         super().__init__(base_url=base_url, **kwargs)
+        self.jira_client = jira_client
+        # Create a method with LRU cache bound to this instance
+        self._find_user = self._create_cached_find_user()
 
     def clean_jira_text(self, text: str) -> str:
         """
@@ -158,6 +164,17 @@ class JiraPreprocessor(BasePreprocessor):
 
         return text.strip()
 
+    def _create_cached_find_user(self):
+        """Create a cached version of the find_user method."""
+
+        @lru_cache(maxsize=100)
+        def cached_find_user(account_id):
+            """Cached version of user lookup by account ID."""
+            LOGGER.debug(f"Cache miss for user: {account_id}")
+            return self.jira_client.user(account_id)
+
+        return cached_find_user
+
     def _process_mentions(self, text: str, pattern: str) -> str:
         """
         Process user mentions in text.
@@ -172,8 +189,7 @@ class JiraPreprocessor(BasePreprocessor):
         mentions = re.findall(pattern, text)
         for account_id in mentions:
             try:
-                # Note: This is a placeholder - actual user fetching should be injected
-                display_name = f"User:{account_id}"
+                display_name = f"@<{self.jira_client.user(account_id).displayName}>"
                 text = text.replace(f"[~accountid:{account_id}]", display_name)
             except Exception as e:
                 LOGGER.error(f"Error processing mention for {account_id}: {str(e)}")

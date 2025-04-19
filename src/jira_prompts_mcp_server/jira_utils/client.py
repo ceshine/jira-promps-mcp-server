@@ -36,7 +36,7 @@ class JiraClient:
                 basic_auth=(self.config.username, self.config.api_token),
             )
 
-        self.preprocessor = JiraPreprocessor(base_url=self.config.url)
+        self.preprocessor = JiraPreprocessor(base_url=self.config.url, jira_client=self.jira)
 
         # Cache for frequently used data
         self._field_ids: dict[str, str] | None = None

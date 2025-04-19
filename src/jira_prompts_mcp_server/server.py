@@ -8,7 +8,7 @@ import mcp.types as types
 from mcp.server import Server, models, NotificationOptions
 from mcp.server.stdio import stdio_server
 
-from .jira import JiraFetcher
+from .jira_utils import JiraFetcher
 from .version import __version__
 
 LOGGER = logging.getLogger("jira_prompts")
@@ -116,7 +116,7 @@ async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> type
             raise ValueError("Arguments required")
         issue_key = arguments.get("issue-key", "")
         assert issue_key
-        field_to_value, _ = jira_fetcher.get_issue_fields(issue_key)
+        field_to_value, _ = jira_fetcher.get_issue_and_core_fields(issue_key)
         field_to_value["issue_key"] = issue_key
         return types.GetPromptResult(
             messages=[
