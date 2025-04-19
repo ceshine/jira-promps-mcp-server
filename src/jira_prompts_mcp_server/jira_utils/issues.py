@@ -25,6 +25,33 @@ class IssuesMixin(JiraClient):
             for entry in comments
         ]
 
+    @staticmethod
+    def collect_links(issue: Issue):
+        links = issue.fields.issuelinks
+        results = []
+        for entry in links:
+            try:
+                results.append(
+                    {
+                        "relationship": entry.type.inward,
+                        "key": entry.inwardIssue.key,
+                        "summary": entry.inwardIssue.fields.summary,
+                        "status": entry.inwardIssue.fields.status.name,
+                        "type": entry.inwardIssue.fields.issuetype.name,
+                    }
+                )
+            except AttributeError:
+                results.append(
+                    {
+                        "relationship": entry.type.outward,
+                        "key": entry.outwardIssue.key,
+                        "summary": entry.outwardIssue.fields.summary,
+                        "status": entry.outwardIssue.fields.status.name,
+                        "type": entry.outwardIssue.fields.issuetype.name,
+                    }
+                )
+        return results
+
     def get_issue_and_core_fields(
         self,
         issue_key: str,
