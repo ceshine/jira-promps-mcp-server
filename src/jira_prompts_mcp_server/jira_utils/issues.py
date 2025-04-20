@@ -56,7 +56,6 @@ class IssuesMixin(JiraClient):
     def collect_subtasks(issue):
         return [
             {
-                "relationship": "subtask",
                 "key": entry.key,
                 "summary": entry.fields.summary,
                 "status": entry.fields.status.name,
@@ -85,6 +84,8 @@ class IssuesMixin(JiraClient):
         issue = self.jira.issue(issue_key)
         if isinstance(fields, str):
             fields = fields.split(",")
+        # Weed out any non-existent keys
+        fields = [x for x in fields if x in issue.fields.__dict__]
         results = {field: getattr(issue.fields, field) for field in fields}
         # Special rule for "description" as it requires a conversion from the Jira markup format to the markdown format
         if "description" in results:

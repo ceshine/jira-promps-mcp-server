@@ -2,13 +2,15 @@
 
 import re
 import logging
+import warnings
 from functools import lru_cache
 from typing import Any
 
 
 import jira
-from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify as md
+from bs4 import BeautifulSoup, Tag
+from bs4.element import NavigableString
 
 LOGGER = logging.getLogger("jira_prompts.jira.preprocessor")
 
@@ -64,22 +66,27 @@ class BasePreprocessor:
         user_mentions = soup.find_all("ac:link")
 
         for user_element in user_mentions:
+            # Ensure we're working with a Tag, not just any PageElement
+            if not isinstance(user_element, Tag):
+                continue
             user_ref = user_element.find("ri:user")
-            if user_ref and user_ref.get("ri:account-id"):
+            if user_ref and isinstance(user_ref, Tag) and user_ref.has_attr("ri:account-id"):
                 # Case 1: Direct user reference without link-body
-                account_id = user_ref.get("ri:account-id")
+                account_id = user_ref["ri:account-id"]
                 if isinstance(account_id, str):
                     self._replace_user_mention(user_element, account_id)
                     continue
 
             # Case 2: User reference with link-body containing @
             link_body = user_element.find("ac:link-body")
-            if link_body and "@" in link_body.get_text(strip=True):
-                user_ref = user_element.find("ri:user")
-                if user_ref and user_ref.get("ri:account-id"):
-                    account_id = user_ref.get("ri:account-id")
-                    if isinstance(account_id, str):
-                        self._replace_user_mention(user_element, account_id)
+            if link_body and isinstance(link_body, Tag):
+                link_text = link_body.get_text(strip=True)
+                if "@" in link_text:
+                    user_ref = user_element.find("ri:user")
+                    if user_ref and isinstance(user_ref, Tag) and user_ref.has_attr("ri:account-id"):
+                        account_id = user_ref["ri:account-id"]
+                        if isinstance(account_id, str):
+                            self._replace_user_mention(user_element, account_id)
 
     def _replace_user_mention(self, user_element: Tag, account_id: str) -> None:
         """
@@ -107,7 +114,8 @@ class BasePreprocessor:
         """
         # Fallback: just use the account ID
         new_text = f"@user_{account_id}"
-        user_element.replace_with(new_text)
+        new_element = NavigableString(new_text)
+        user_element.replace_with(new_element)
 
     def _convert_html_to_markdown(self, text: str) -> str:
         """Convert HTML content to markdown if needed."""

@@ -121,14 +121,20 @@ async def list_prompts() -> list[types.Prompt]:
 
 def _postprocessing_for_issue_fields_(field_to_value):
     for name_field in ("status", "priority", "issuetype"):
-        field_to_value[name_field] = field_to_value[name_field].name
+        if name_field in field_to_value:
+            field_to_value[name_field] = field_to_value[name_field].name
     for user_field in ("assignee", "reporter"):
-        field_to_value[user_field] = field_to_value[user_field].displayName
-    field_to_value["parent"] = {
-        "key": field_to_value["parent"].key,
-        "summary": field_to_value["parent"].fields.summary,
-        "status": field_to_value["parent"].fields.status.name,
-    }
+        if user_field in field_to_value:
+            if field_to_value[user_field] is None:
+                field_to_value[user_field] = "N/A"
+            else:
+                field_to_value[user_field] = field_to_value[user_field].displayName
+    if "parent" in field_to_value:
+        field_to_value["parent"] = {
+            "key": field_to_value["parent"].key,
+            "summary": field_to_value["parent"].fields.summary,
+            "status": field_to_value["parent"].fields.status.name,
+        }
 
 
 def get_issue_and_core_fields(jira_fetcher: JiraFetcher, arguments: dict[str, str] | None):
