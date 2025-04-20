@@ -139,7 +139,7 @@ def _postprocessing_for_issue_fields_(field_to_value):
 
 def get_issue_and_core_fields(jira_fetcher: JiraFetcher, arguments: dict[str, str] | None):
     if not arguments:
-        raise ValueError("Argument `issue-keu` is required")
+        raise ValueError("Argument `issue-key` is required")
     issue_key = arguments.get("issue-key", "")
     assert issue_key
     field_to_value, issue = jira_fetcher.get_issue_and_core_fields(issue_key)
@@ -157,7 +157,10 @@ async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> type
         field_to_value, issue = get_issue_and_core_fields(jira_fetcher, arguments)
         if name == "jira-issue-full":
             field_to_value["links"] = jira_fetcher.collect_links(issue)
-            field_to_value["subtasks"] = jira_fetcher.collect_subtasks(issue)
+            if field_to_value["issuetype"] != "Epic":
+                field_to_value["subtasks"] = jira_fetcher.collect_subtasks(issue)
+            else:
+                field_to_value["child_tasks"] = jira_fetcher.collect_epic_children(issue)
             field_to_value["comments"] = jira_fetcher.collect_comments(issue)
         return types.GetPromptResult(
             messages=[

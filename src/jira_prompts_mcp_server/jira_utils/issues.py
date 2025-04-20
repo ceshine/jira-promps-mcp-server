@@ -64,6 +64,23 @@ class IssuesMixin(JiraClient):
             for entry in issue.fields.subtasks
         ]
 
+    def collect_epic_children(self, issue) -> list[dict[str, str]]:
+        assert issue.fields.issuetype.name == "Epic"
+        results = []
+        for child_issue in self.jira.search_issues(f'"parent" = "{issue.key}"', maxResults=256):
+            assert isinstance(child_issue, Issue)
+            results.append(
+                {
+                    "key": child_issue.key,
+                    "summary": child_issue.fields.summary,
+                    "status": child_issue.fields.status.name,
+                    "type": child_issue.fields.issuetype.name,
+                    "created": child_issue.fields.created,
+                    "updated": child_issue.fields.updated,
+                }
+            )
+        return sorted(results, key=lambda x: x["created"])
+
     def get_issue_and_core_fields(
         self,
         issue_key: str,
