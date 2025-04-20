@@ -252,7 +252,7 @@ class JiraPreprocessor(BasePreprocessor):
 
         # Text formatting (bold, italic)
         output = re.sub(
-            r"([*_])(.*?)\1",
+            r"(?<![a-zA-Z0-9])([*_])(.*?)\1",
             lambda match: ("**" if match.group(1) == "*" else "*")
             + match.group(2)
             + ("**" if match.group(1) == "*" else "*"),
