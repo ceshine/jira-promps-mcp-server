@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -98,6 +99,7 @@ def _postprocessing_for_issue_fields_(field_to_value):
     if "parent" in field_to_value:
         field_to_value["parent"] = {
             "key": field_to_value["parent"].key,
+            "issue_type": field_to_value["parent"].fields.issuetype.name,
             "summary": field_to_value["parent"].fields.summary,
             "status": field_to_value["parent"].fields.status.name,
         }
@@ -146,3 +148,27 @@ def jira_issu_full(issue_key: str = Field(description="The key/ID of the issue")
     return PromptMessage(
         role="user", content=TextContent(type="text", text=json.dumps(field_to_value, cls=StrFallbackEncoder, indent=4))
     )
+
+
+@APP.tool()
+def epics_of_jira_issues(issue_key_list: list[str] = Field(description="A list of issue keys")) -> dict:
+    "Retrieve the epic title and key for each item in a list of Jira issues."
+    ctx = get_context()
+    # TODO: this is probably not best way to get the Jira fetcher instance
+    jira_fetcher = ctx.request_context.lifespan_context
+    results = {}
+    for issue_key in issue_key_list:
+        field_to_value, _ = get_issue_and_core_fields(jira_fetcher, {"issue_key": issue_key})
+        parent = field_to_value.get("parent")
+        if parent is not None and parent["issue_type"] != "Epic":
+            parent = get_issue_and_core_fields(jira_fetcher, {"issue_key": parent["key"]})[0].get("parent")
+            if parent is not None and parent["issue_type"] != "Epic":
+                asyncio.run(ctx.warning("Unexpected grandparent issue type: %s", parent["issue_type"]))
+        if parent is not None and parent["issue_type"] == "Epic":
+            results[issue_key] = {
+                "key": parent["key"],
+                "title": parent["summary"],
+            }
+        else:
+            results[issue_key] = {"description": "No epic for this ticket."}
+    return results
