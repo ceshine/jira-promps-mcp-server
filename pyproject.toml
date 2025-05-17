@@ -5,9 +5,9 @@ description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.13.3",
+    "fastmcp>=2.3.4",
     "jira>=3.8.0",
     "markdownify>=1.1.0",
-    "mcp>=1.6.0",
     "pydantic>=2.11.3",
     "typer>=0.15.2",
 ]

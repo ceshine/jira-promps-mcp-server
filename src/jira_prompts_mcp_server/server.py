@@ -4,43 +4,14 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-import mcp.types as types
-from mcp.server import Server, models, NotificationOptions
-from mcp.server.stdio import stdio_server
+from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_context
+from mcp.types import PromptMessage, TextContent
+from pydantic import Field
 
 from .jira_utils import JiraFetcher
-from .version import __version__
 
 LOGGER = logging.getLogger("jira_prompts")
-
-PROMPTS = {
-    "jira-issue-brief": types.Prompt(
-        name="jira-issue-brief",
-        description="Get the core information about a Jira issue",
-        arguments=[
-            # Note: Zed only supports one prompt argument
-            # Reference: https://github.com/zed-industries/zed/issues/21944
-            types.PromptArgument(
-                name="issue-key",
-                description="The key/ID of the issue",
-                required=True,
-            ),
-        ],
-    ),
-    "jira-issue-full": types.Prompt(
-        name="jira-issue-full",
-        description="Get core fields, comments, and linked issues for a Jira issue",
-        arguments=[
-            # Note: Zed only supports one prompt argument
-            # Reference: https://github.com/zed-industries/zed/issues/21944
-            types.PromptArgument(
-                name="issue-key",
-                description="The key/ID of the issue",
-                required=True,
-            ),
-        ],
-    ),
-}
 
 
 class StrFallbackEncoder(json.JSONEncoder):
@@ -88,7 +59,7 @@ class StrFallbackEncoder(json.JSONEncoder):
 
 
 @asynccontextmanager
-async def server_lifespan(server: Server) -> AsyncIterator[JiraFetcher]:
+async def server_lifespan(server: FastMCP) -> AsyncIterator[JiraFetcher]:
     """Initialize and clean up application resources."""
     jira_url = os.getenv("JIRA_URL")
     if jira_url is None:
@@ -111,12 +82,7 @@ async def server_lifespan(server: Server) -> AsyncIterator[JiraFetcher]:
         pass
 
 
-APP = Server("jira-prompts-mcp", lifespan=server_lifespan)
-
-
-@APP.list_prompts()
-async def list_prompts() -> list[types.Prompt]:
-    return list(PROMPTS.values())
+APP = FastMCP("jira-prompts-mcp", lifespan=server_lifespan)
 
 
 def _postprocessing_for_issue_fields_(field_to_value):
@@ -139,8 +105,8 @@ def _postprocessing_for_issue_fields_(field_to_value):
 
 def get_issue_and_core_fields(jira_fetcher: JiraFetcher, arguments: dict[str, str] | None):
     if not arguments:
-        raise ValueError("Argument `issue-key` is required")
-    issue_key = arguments.get("issue-key", "")
+        raise ValueError("Argument `issue_key` is required")
+    issue_key = arguments.get("issue_key", "")
     assert issue_key
     field_to_value, issue = jira_fetcher.get_issue_and_core_fields(issue_key)
     field_to_value["issue_key"] = issue_key
@@ -148,48 +114,35 @@ def get_issue_and_core_fields(jira_fetcher: JiraFetcher, arguments: dict[str, st
     return field_to_value, issue
 
 
-@APP.get_prompt()
-async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> types.GetPromptResult:
-    if name not in PROMPTS:
-        raise ValueError(f"Prompt not found: {name}")
-    jira_fetcher = APP.request_context.lifespan_context
-    if name.startswith("jira-issue"):
-        field_to_value, issue = get_issue_and_core_fields(jira_fetcher, arguments)
-        if name == "jira-issue-full":
-            field_to_value["links"] = jira_fetcher.collect_links(issue)
-            if field_to_value["issuetype"] != "Epic":
-                field_to_value["subtasks"] = jira_fetcher.collect_subtasks(issue)
-            else:
-                field_to_value["child_tasks"] = jira_fetcher.collect_epic_children(issue)
-            field_to_value["comments"] = jira_fetcher.collect_comments(issue)
-        return types.GetPromptResult(
-            messages=[
-                types.PromptMessage(
-                    role="user",
-                    content=types.TextContent(
-                        type="text",
-                        text=json.dumps(field_to_value, cls=StrFallbackEncoder, indent=4),
-                    ),
-                )
-            ]
-        )
+@APP.prompt(
+    name="jira-issue-brief",
+)
+def jira_issu_brief(issue_key: str = Field(description="The key/ID of the issue")):
+    "Get the core information about a Jira issue, including its description, parent, status, type, priority, and assignee."
+    ctx = get_context()
+    # TODO: this is probably not best way to get the Jira fetcher instance
+    jira_fetcher = ctx.request_context.lifespan_context
+    field_to_value, issue = get_issue_and_core_fields(jira_fetcher, {"issue_key": issue_key})
+    return PromptMessage(
+        role="user", content=TextContent(type="text", text=json.dumps(field_to_value, cls=StrFallbackEncoder, indent=4))
+    )
+
+
+@APP.prompt(
+    name="jira-issue-full",
+)
+def jira_issu_full(issue_key: str = Field(description="The key/ID of the issue")):
+    "Get the full information about a Jira issue, including core information, linked issues, child tasks/sub tasks, and comments."
+    ctx = get_context()
+    # TODO: this is probably not best way to get the Jira fetcher instance
+    jira_fetcher = ctx.request_context.lifespan_context
+    field_to_value, issue = get_issue_and_core_fields(jira_fetcher, {"issue_key": issue_key})
+    field_to_value["links"] = jira_fetcher.collect_links(issue)
+    if field_to_value["issuetype"] != "Epic":
+        field_to_value["subtasks"] = jira_fetcher.collect_subtasks(issue)
     else:
-        raise RuntimeError("Should not reach this line.")
-
-
-async def run_server() -> None:
-    """Run the MCP server with the specified transport."""
-
-    async with stdio_server() as (read_stream, write_stream):
-        await APP.run(
-            read_stream,
-            write_stream,
-            models.InitializationOptions(
-                server_name="jira_prompts_mcp_server",
-                server_version=__version__,
-                capabilities=APP.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+        field_to_value["child_tasks"] = jira_fetcher.collect_epic_children(issue)
+    field_to_value["comments"] = jira_fetcher.collect_comments(issue)
+    return PromptMessage(
+        role="user", content=TextContent(type="text", text=json.dumps(field_to_value, cls=StrFallbackEncoder, indent=4))
+    )

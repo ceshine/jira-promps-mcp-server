@@ -6,6 +6,17 @@ This repository draws significant inspiration from the [MarkItDown MCP server](h
 
 Here's another MCP server project of mine: [ceshine/git-prompts-mcp-server](https://github.com/ceshine/git-prompts-mcp-server)
 
+## Changelog
+
+### 0.1.0
+
+* Migrate from the low-level [mcp package](https://github.com/modelcontextprotocol/python-sdk) to the [FastMCP](https://github.com/jlowin/fastmcp?tab=readme-ov-file) package.
+* Add a CLI for testing the server.
+
+### 0.0.1
+
+The initial release with two prompts implemented: `jira-issue-brief` and `jira-issue-full`.
+
 ## Installation
 
 ### Manual Installation
@@ -52,6 +63,14 @@ Examples:
 1. `/jira-issue-brief PROJ-123`
 2. `/jira-issue-brief PROJ-155`
 
+### Testing the server using the CLI
+
+Prerequisities: configuring the required environment variables (`JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`)
+
+You can test the
+
+* `uv run python -m jira_prompts_mcp_server.cli jira-brief BOOM-1234`
+* `uv run python -m jira_prompts_mcp_server.cli jira-full BOOM-1234`
 
 ## License
 

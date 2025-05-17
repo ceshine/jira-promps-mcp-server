@@ -1,19 +1,18 @@
 import os
-import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
 
 import typer
 
-from .server import run_server
+from .server import APP
 
 
 def _main(url: str, username: str, api_token: str) -> None:
     os.environ["JIRA_URL"] = url
     os.environ["JIRA_USERNAME"] = username
     os.environ["JIRA_API_TOKEN"] = api_token
-    asyncio.run(run_server())
+    APP.run()
 
 
 def entry_point():
