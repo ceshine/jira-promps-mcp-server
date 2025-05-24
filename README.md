@@ -67,7 +67,7 @@ Examples:
 
 Prerequisities: configuring the required environment variables (`JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`)
 
-You can test the
+You can quickly test the MCP server using the CLI. Below are some example commands:
 
 * `uv run python -m jira_prompts_mcp_server.cli jira-brief BOOM-1234`
 * `uv run python -m jira_prompts_mcp_server.cli jira-full BOOM-1234`
